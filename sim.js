@@ -73,7 +73,10 @@ var QYJ = (function () {
 
   function sister(cold) {
     if (cold === 0) return '妹妹一夜没醒。';
+    if (cold === 1) return '妹妹半夜翻了个身，把被子往上拽了拽，没醒。';
+    if (cold === 2) return '妹妹早上说做了个梦，梦里光着脚在雪地上走了几步。';
     if (cold <= 4) return '妹妹早上说半夜有一会儿脚凉。';
+    if (cold <= 7) return '妹妹早上说半夜冻醒了一回，又迷迷糊糊睡着了。';
     if (cold <= 10) return '妹妹醒了，缩成一团，脸冰凉。';
     return '妹妹醒了，嘴唇发紫，抱着你不撒手。';
   }
