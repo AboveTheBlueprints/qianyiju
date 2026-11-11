@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前一局</title>
+<style>
+  body { background: #15171c; color: #ddd; font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif; margin: 0; padding: 18px; }
+  #wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 500; color: #eee; margin: 0 0 10px; }
+  #intro { color: #aaa; line-height: 1.7; font-size: 15px; margin-bottom: 12px; }
+  #past { color: #888; font-size: 14px; margin-bottom: 8px; min-height: 1em; }
+  #head { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0; }
+  #when { font-size: 16px; color: #eee; }
+  #fire { font-size: 15px; }
+  #bar { display: inline-block; vertical-align: middle; margin-left: 6px; }
+  #bar span { display: inline-block; width: 7px; height: 12px; margin-right: 2px; background: #333; border-radius: 1px; }
+  #bar span.on { background: #e8833a; }
+  #board { display: flex; gap: 6px; margin: 10px 0; }
+  .cell { flex: 1; min-height: 120px; background: #1f232b; border: 1px solid #2c313b; border-radius: 6px; padding: 6px; text-align: center; position: relative; }
+  .cell.narrow { flex: 0.8; background: #1a1d24; }
+  .cell .lab { font-size: 13px; color: #888; margin-bottom: 6px; }
+  .cell .note { font-size: 12px; color: #777; margin-top: 4px; }
+  .tok { display: inline-block; margin: 2px; padding: 3px 6px; border-radius: 12px; font-size: 15px; background: #39404d; color: #cfd6e2; }
+  .tok.me { background: #b8642b; color: #fff; }
+  .tok .wood { font-size: 11px; background: #6b4a2a; color: #f1d9b8; border-radius: 6px; padding: 0 3px; margin-left: 3px; }
+  #now { min-height: 2.6em; font-size: 15px; line-height: 1.6; color: #eee; margin: 8px 0; }
+  #now .cold { color: #8fb6e8; }
+  #btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  button { font-size: 16px; padding: 9px 14px; border-radius: 6px; border: 1px solid #444; background: #2a2f39; color: #eee; cursor: pointer; }
+  button:hover { background: #343a46; }
+  button:disabled { opacity: 0.35; cursor: default; }
+  button.small { font-size: 13px; padding: 6px 10px; color: #aaa; }
+  #dawn { display: none; background: #232833; border-radius: 6px; padding: 12px; margin: 10px 0; line-height: 1.7; }
+  #log { font-size: 13px; color: #999; line-height: 1.6; margin-top: 14px; border-top: 1px solid #2a2e36; padding-top: 8px; }
+  #log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #log b { color: #bbb; font-weight: 400; display: inline-block; width: 2.4em; }
+  .keys { font-size: 12px; color: #666; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>前一局</h1>
+  <div id="intro"></div>
+  <div id="past"></div>
+  <div id="head"><span id="when"></span><span id="fire"></span></div>
+  <div id="board"></div>
+  <div id="now"></div>
+  <div id="btns">
+    <button id="bW">← 西</button>
+    <button id="bE">东 →</button>
+    <button id="bT">拿</button>
+    <button id="bP">放</button>
+    <button id="bS">等</button>
+    <button class="small" id="bU">撤一步</button>
+  </div>
+  <div class="keys">键盘：← → 走，空格 等，Z 拿，X 放，Backspace 撤一步</div>
+  <div id="dawn"></div>
+  <div id="log"></div>
+</div>
+<script src="sim.js"></script>
+<script>
+(function () {
+  var Q = QYJ;
+  var CN = ['一', '二', '三'];
+  var CELLS = ['屋', '', '井', '', '棚'];
+  var effs = [];      // 前几夜你真做了的
+  var colds = [];     // 前几夜冷了几步
+  var acts = [];      // 这一夜你按过的
+  var k = 0;          // 第几夜（0 起）
+
+  function $(id) { return document.getElementById(id); }
+
+  function intro() {
+    var s;
+    if (k === 0) {
+      s = '天黑了。屋里的炉子烧着，够烧 ' + Q.FIRE0 + ' 步。妹妹在炕上睡着。<br>' +
+          '柴在院子那头的柴棚里。屋到柴棚中间一条窄道，一格只过得去一个人，只有井边宽一点。<br>' +
+          '一夜 ' + Q.NIGHT + ' 步，一共 ' + Q.MAXN + ' 夜。按一下，就过一步。';
+    } else {
+      var olds = [];
+      for (var j = 0; j < k; j++) olds.push(Q.NUM[j]);
+      s = '天又黑了。炉子又是 ' + Q.FIRE0 + ' 步的火，柴棚里又是 ' + Q.WOOD0 + ' 根柴。<br>' +
+          '屋里不止你一个：前' + ['一', '两'][k - 1] + '夜的你也起来了（' + olds.join('、') + '，①是第一夜的你），照那一夜做过的再做一遍。';
+    }
+    $('intro').innerHTML = s;
+    var p = [];
+    for (var i = 0; i < colds.length; i++) p.push('第' + CN[i] + '夜冷了 ' + colds[i] + ' 步');
+    $('past').textContent = p.join('　');
+  }
+
+  function run() { return Q.night(effs.slice(0, k).concat([acts])); }
+
+  function tokHtml(name, wood) {
+    return '<span class="tok' + (name === '你' ? ' me' : '') + '">' + name + (wood ? '<span class="wood">柴</span>' : '') + '</span>';
+  }
+
+  function draw() {
+    var r = run();
+    var t = acts.length;
+    var st = t > 0 ? r.steps[t - 1] : null;
+    var n = k + 1;
+    var names = [];
+    for (var j = 0; j < n - 1; j++) names.push(Q.NUM[j]);
+    names.push('你');
+    var pos = st ? st.pos : names.map(function () { return 0; });
+    var hold = st ? st.hold : names.map(function () { return false; });
+    var fire = st ? st.fire : Q.FIRE0;
+    var woodLeft = Q.WOOD0;
+    if (st) {
+      // 棚里还剩几根：数这一步以前拿走的
+      var taken = 0;
+      for (var s = 0; s < t; s++) r.steps[s].ev.forEach(function (e) { if (e.indexOf('抱起一根柴') >= 0) taken++; });
+      woodLeft = Q.WOOD0 - taken;
+    }
+    $('when').textContent = '第' + CN[k] + '夜　' + (t === 0 ? '天刚黑' : '第 ' + t + ' / ' + Q.NIGHT + ' 步');
+    var bar = '';
+    for (var b = 0; b < Math.max(fire, Q.FIRE0); b++) bar += '<span' + (b < fire ? ' class="on"' : '') + '></span>';
+    $('fire').innerHTML = (fire > 0 ? '火 ' + fire : '火灭了') + '<span id="bar">' + bar + '</span>';
+    var html = '';
+    for (var c = 0; c <= Q.END; c++) {
+      var inner = '';
+      for (var i = 0; i < n; i++) if (pos[i] === c) inner += tokHtml(names[i], hold[i]);
+      var lab = CELLS[c] || '';
+      var note = '';
+      if (c === 0) note = '炉子 · 妹妹' + (fire > 0 ? '睡着' : '缩着');
+      if (c === 2) note = '站得下两个';
+      if (c === Q.END) note = '柴 ' + woodLeft + ' 根';
+      html += '<div class="cell' + (c === 1 || c === 3 ? ' narrow' : '') + '"><div class="lab">' + (lab || '&nbsp;') + '</div>' + inner +
+              (note ? '<div class="note">' + note + '</div>' : '') + '</div>';
+    }
+    $('board').innerHTML = html;
+    if (st) {
+      $('now').innerHTML = st.ev.length ? st.ev.map(function (e) { return e === '冷' ? '<span class="cold">冷</span>' : e; }).join('；') : '&nbsp;';
+    } else $('now').innerHTML = '&nbsp;';
+    var lg = '';
+    for (var s2 = t - 1; s2 >= 0; s2--) {
+      var x = r.steps[s2];
+      lg += '<div><b>' + x.t + '</b>火 ' + x.fire + (x.ev.length ? '　' + x.ev.join('；') : '') + '</div>';
+    }
+    $('log').innerHTML = lg;
+    var done = t >= Q.NIGHT;
+    ['bW', 'bE', 'bT', 'bP', 'bS'].forEach(function (id) { $(id).disabled = done; });
+    $('bU').disabled = t === 0;
+    var dawn = $('dawn');
+    if (done) {
+      var msg = '天亮了。这一夜冷了 ' + r.cold + ' 步，棚里剩 ' + r.wood + ' 根柴。' + Q.sister(r.cold);
+      if (k < Q.MAXN - 1) msg += '<br><button id="bN">第' + CN[k + 1] + '夜</button>';
+      else msg += '<br>三夜过完了。<br><button id="bR">从第一夜再来</button>';
+      dawn.innerHTML = msg;
+      dawn.style.display = 'block';
+      var bn = $('bN'); if (bn) bn.onclick = nextNight;
+      var br = $('bR'); if (br) br.onclick = restart;
+    } else {
+      dawn.style.display = 'none';
+    }
+  }
+
+  function press(a) {
+    if (acts.length >= Q.NIGHT) return;
+    acts.push(a);
+    draw();
+  }
+  function undo() { if (acts.length) { acts.pop(); draw(); } }
+  function nextNight() {
+    var r = run();
+    effs.push(r.eff);
+    colds.push(r.cold);
+    acts = [];
+    k += 1;
+    intro();
+    draw();
+    window.scrollTo(0, 0);
+  }
+  function restart() {
+    effs = []; colds = []; acts = []; k = 0;
+    intro(); draw(); window.scrollTo(0, 0);
+  }
+
+  $('bW').onclick = function () { press('西'); };
+  $('bE').onclick = function () { press('东'); };
+  $('bT').onclick = function () { press('拿'); };
+  $('bP').onclick = function () { press('放'); };
+  $('bS').onclick = function () { press('等'); };
+  $('bU').onclick = undo;
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') press('西');
+    else if (e.key === 'ArrowRight') press('东');
+    else if (e.key === ' ') { e.preventDefault(); press('等'); }
+    else if (e.key === 'z' || e.key === 'Z') press('拿');
+    else if (e.key === 'x' || e.key === 'X') press('放');
+    else if (e.key === 'Backspace') { e.preventDefault(); undo(); }
+    else if (e.key === 'Enter') { var bn = $('bN'); if (bn) bn.click(); }
+  });
+
+  intro();
+  draw();
+})();
+</script>
+</body>
+</html>
